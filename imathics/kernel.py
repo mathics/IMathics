@@ -9,7 +9,7 @@ from mathics.core.expression import Integer
 from mathics.builtin import builtins
 from mathics import settings
 from mathics.version import __version__
-from mathics.doc import Doc
+from mathics.doc.doc import Doc
 
 
 class MathicsKernel(Kernel):
@@ -24,7 +24,7 @@ class MathicsKernel(Kernel):
 
     def __init__(self, **kwargs):
         Kernel.__init__(self, **kwargs)
-        self.definitions = Definitions(add_builtin=True, cache=True)
+        self.definitions = Definitions(add_builtin=True)        # TODO Cache
         self.definitions.set_ownvalue('$Line', Integer(0))  # Reset the line number
 
     def do_execute(self, code, silent, store_history=True, user_expressions=None,
@@ -123,7 +123,3 @@ class MathicsKernel(Kernel):
             return {'status': 'incomplete', 'indent': 4 * len(stack) * ' '}
         else:
             return {'status': 'complete'}
-
-if __name__ == '__main__':
-    from ipykernel.kernelapp import IPKernelApp
-    IPKernelApp.launch_instance(kernel_class=MathicsKernel)

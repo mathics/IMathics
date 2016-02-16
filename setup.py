@@ -23,7 +23,7 @@ INSTALL_REQUIRES = [] + SETUP_REQUIRES
 
 kernel_json = {
     'argv': [sys.executable,
-             '-m', 'mathics',
+             '-m', 'imathics',
              '-f', '{connection_file}'],
     'display_name': 'mathics',
     'language': 'Wolfram',
