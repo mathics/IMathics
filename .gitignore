@@ -1,0 +1,4 @@
+*.pyc
+imathics.egg-info/
+build/
+dist/
