@@ -8,12 +8,6 @@ from distutils import log
 from setuptools import setup
 from setuptools.command.install import install
 
-# Ensure user has the correct Python version
-if sys.version_info[:2] != (2, 7):
-    print("IMathics supports Python 2.7. \
-Python %d.%d detected" % sys.version_info[:2])
-    sys.exit(-1)
-
 # General Requirements
 SETUP_REQUIRES = ['ipython', 'ipykernel']
 
