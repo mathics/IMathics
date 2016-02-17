@@ -20,7 +20,7 @@ kernel_json = {
              '-m', 'imathics',
              '-f', '{connection_file}'],
     'display_name': 'mathics',
-    'language': 'Wolfram',
+    'language': 'Mathematica',
     'name': 'mathics',
 }
 
