@@ -48,13 +48,27 @@ class InstallIMathics(install):
         log.info('Writing kernel spec')
         kernel_spec_path = write_kernel_spec(overrides=kernel_json)
 
-        log.info('Installing kernel spec')
+        log.info('Installing kernel spec ' + kernel_spec_path)
         try:
             kernel_spec_manager.install_kernel_spec(
                 kernel_spec_path,
                 kernel_name=kernel_json['name'],
                 user=self.user)
-        except:
+        except Exception as e:
+            log.error(str(e.args))
+            log.error('Failed to install kernel spec')
+        else:
+            return
+
+        # retry with not self.user
+        log.info('Retry install kernel spec')
+        try:
+            kernel_spec_manager.install_kernel_spec(
+                kernel_spec_path,
+                kernel_name=kernel_json['name'],
+                user=not self.user)
+        except Exception as e:
+            log.error(str(e.args))
             log.error('Failed to install kernel spec')
 
 setup(
