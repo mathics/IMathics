@@ -14,9 +14,9 @@ from mathics.doc.doc import Doc
 
 class MathicsKernel(Kernel):
     implementation = 'Mathics'
-    implementation_version = __version__
-    language_version = '0.1'    # TODO
+    implementation_version = '0.1'
     language_info = {
+        'version': __version__,
         'name': 'Mathematica',
         'mimetype': 'text/x-mathematica',
     }
