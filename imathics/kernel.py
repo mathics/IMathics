@@ -38,7 +38,7 @@ class MathicsKernel(Kernel):
 
         try:
             evaluation = Evaluation(code, self.definitions, out_callback=self.out_callback,
-                                    timeout=settings.TIMEOUT)
+                                    timeout=settings.TIMEOUT, format='xml')
         except Exception as exc:
             response['status'] = 'error'
             response['ename'] = 'System:exception'
@@ -52,8 +52,7 @@ class MathicsKernel(Kernel):
             for result in evaluation.results:
                 if result.result is not None:
                     data = {
-                        'text/plain': result.result,
-                        # TODO html / mathjax output
+                        'text/html': result.result,
                     }
                     content = {'execution_count': result.line_no, 'data': data, 'metadata': {}}
                     self.send_response(self.iopub_socket, 'execute_result', content)
