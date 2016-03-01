@@ -6,6 +6,7 @@ from ipykernel.kernelbase import Kernel
 from mathics.core.definitions import Definitions
 from mathics.core.evaluation import Evaluation, Message, Result
 from mathics.core.expression import Integer
+from mathics.core.parser import parse_lines, IncompleteSyntaxError, TranslateError
 from mathics.builtin import builtins
 from mathics import settings
 from mathics.version import __version__
@@ -36,20 +37,20 @@ class MathicsKernel(Kernel):
             'user_expressions': {},
         }
 
+        evaluation = Evaluation(self.definitions, out_callback=self.out_callback)
         try:
-            evaluation = Evaluation(code, self.definitions, out_callback=self.out_callback,
-                                    timeout=settings.TIMEOUT)
+            results = evaluation.parse_evaluate(code, timeout=settings.TIMEOUT)
         except Exception as exc:
+            # internal error
             response['status'] = 'error'
             response['ename'] = 'System:exception'
             response['traceback'] = traceback.format_exception(*sys.exc_info())
-            evaluation = Evaluation()
-            raise exc
+            results = []
         else:
             response['status'] = 'ok'
 
         if not silent:
-            for result in evaluation.results:
+            for result in results:
                 if result.result is not None:
                     data = {
                         'text/plain': result.result,
@@ -93,33 +94,13 @@ class MathicsKernel(Kernel):
         data = {'text/plain': doc.text(detail_level), 'text/html': doc.html()}        # TODO 'application/x-tex': doc.latex()
         return {'status': 'ok', 'found': True, 'data': data, 'metadata': {}}
 
-    @staticmethod
-    def do_is_complete(code):
-        code = code.rstrip()
-
-        trailing_ops = ['+', '-', '/', '*', '^', '=', '>', '<', '/;', '/:',
-                        '/.', '&&', '||']
-        if any(code.endswith(op) for op in trailing_ops):
+    def do_is_complete(self, code):
+        try:
+            # list forces generator evaluation (parse all lines)
+            list(parse_lines(code, self.definitions))
+        except IncompleteSyntaxError:
             return {'status': 'incomplete', 'indent': ''}
-
-        brackets = [('(', ')'), ('[', ']'), ('{', '}')]
-        kStart, kEnd, stack = 0, 1, []
-        in_string = False
-        for char in code:
-            if char == '"':
-                in_string = not in_string
-            if not in_string:
-                for bracketPair in brackets:
-                    if char == bracketPair[kStart]:
-                        stack.append(char)
-                    elif char == bracketPair[kEnd]:
-                        if len(stack) == 0:
-                            return {'status': 'invalid'}
-                        if stack.pop() != bracketPair[kStart]:
-                            return {'status': 'invalid'}
-        if in_string:
-            return {'status': 'incomplete', 'indent': ''}
-        elif len(stack) != 0:
-            return {'status': 'incomplete', 'indent': 4 * len(stack) * ' '}
+        except TranslateError:
+            return {'status': 'invalid'}
         else:
             return {'status': 'complete'}

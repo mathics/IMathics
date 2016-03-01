@@ -36,6 +36,7 @@ class MyKernelTests(jupyter_kernel_test.KernelTests):
         'Sin[1',
         '1 +',
         '"abc ',
+        'x (*',
     ]
     invalid_code_samples = [
         '{(1 + }2)',
