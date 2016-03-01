@@ -11,8 +11,7 @@ from setuptools.command.install import install
 # General Requirements
 SETUP_REQUIRES = ['ipython', 'ipykernel']
 
-# TODO relies on 'mathics' sn6uv/Mathics jupyter branch
-INSTALL_REQUIRES = [] + SETUP_REQUIRES
+INSTALL_REQUIRES = ['mathics==0.9'] + SETUP_REQUIRES
 
 
 kernel_json = {
