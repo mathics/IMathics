@@ -11,7 +11,7 @@ from setuptools.command.install import install
 # General Requirements
 SETUP_REQUIRES = ['ipython', 'ipykernel']
 
-INSTALL_REQUIRES = ['mathics==0.9'] + SETUP_REQUIRES
+INSTALL_REQUIRES = ['mathics>=0.9'] + SETUP_REQUIRES
 
 
 kernel_json = {
