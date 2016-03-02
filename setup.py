@@ -11,7 +11,9 @@ from setuptools.command.install import install
 # General Requirements
 SETUP_REQUIRES = ['ipython', 'ipykernel']
 
-INSTALL_REQUIRES = ['mathics>=0.9'] + SETUP_REQUIRES
+MATHICS_REQUIRES = ['django >= 1.8, < 1.9', 'ply==3.8', 'six>=1.10']
+
+INSTALL_REQUIRES = ['mathics>=0.9'] + MATHICS_REQUIRES + SETUP_REQUIRES
 
 
 kernel_json = {
