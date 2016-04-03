@@ -59,7 +59,7 @@ class MathicsKernel(Kernel):
                     content = {'execution_count': result.line_no, 'data': data, 'metadata': {}}
                     self.send_response(self.iopub_socket, 'execute_result', content)
 
-        response['execution_count'] = self.definitions.get_line()
+        response['execution_count'] = self.definitions.get_line_no()
 
         return response
 
