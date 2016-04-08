@@ -37,7 +37,7 @@ class MathicsKernel(Kernel):
             'user_expressions': {},
         }
 
-        evaluation = Evaluation(self.definitions, out_callback=self.out_callback)
+        evaluation = Evaluation(self.definitions, result_callback=self.result_callback, out_callback=self.out_callback)
         try:
             results = evaluation.parse_evaluate(code, timeout=settings.TIMEOUT)
         except Exception as exc:
@@ -48,19 +48,7 @@ class MathicsKernel(Kernel):
             results = []
         else:
             response['status'] = 'ok'
-
-        if not silent:
-            for result in results:
-                if result.result is not None:
-                    data = {
-                        'text/plain': result.result,
-                        # TODO html / mathjax output
-                    }
-                    content = {'execution_count': result.line_no, 'data': data, 'metadata': {}}
-                    self.send_response(self.iopub_socket, 'execute_result', content)
-
         response['execution_count'] = self.definitions.get_line_no()
-
         return response
 
     def out_callback(self, out):
@@ -77,6 +65,14 @@ class MathicsKernel(Kernel):
         else:
             raise ValueError('Unknown out')
         self.send_response(self.iopub_socket, 'stream', content)
+
+    def result_callback(self, result):
+        content = {
+            'execution_count': result.line_no,
+            'data': result.data,
+            'metadata': result.metadata,
+        }
+        self.send_response(self.iopub_socket, 'execute_result', content)
 
     def do_inspect(self, code, cursor_pos, detail_level=0):
         # name = code[:cursor_pos]
