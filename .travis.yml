@@ -16,6 +16,8 @@ matrix:
     - python: pypy2
     - env: MATHICS="v0.9"
 before_install:
+  - pip install ipython
+  - pip install ipykernel
   - pip install jupyter_kernel_test
   - pip install unittest2
   - pip install git+https://github.com/mathics/mathics.git@$MATHICS
