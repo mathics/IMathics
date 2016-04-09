@@ -1,6 +1,7 @@
 import unittest
 import jupyter_kernel_test
 
+
 class MyKernelTests(jupyter_kernel_test.KernelTests):
     # Required --------------------------------------
 

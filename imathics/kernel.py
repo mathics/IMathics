@@ -105,7 +105,7 @@ class MathicsKernel(Kernel):
         remove_system = False
         system_prefix = 'System`'
         if '`' not in name:
-            name =  system_prefix + name
+            name = system_prefix + name
             remove_system = True
 
         matches = []
