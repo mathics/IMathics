@@ -6,7 +6,7 @@ from ipykernel.kernelbase import Kernel
 from mathics.core.definitions import Definitions
 from mathics.core.evaluation import Evaluation, Message, Result
 from mathics.core.expression import Integer
-from mathics.core.parser import parse_lines, IncompleteSyntaxError, TranslateError
+from mathics.core.parser import parse_lines, IncompleteSyntaxError, TranslateError, MathicsScanner, ScanError
 from mathics.builtin import builtins
 from mathics import settings
 from mathics.version import __version__
@@ -75,19 +75,22 @@ class MathicsKernel(Kernel):
         self.send_response(self.iopub_socket, 'execute_result', content)
 
     def do_inspect(self, code, cursor_pos, detail_level=0):
-        # name = code[:cursor_pos]
-        name = code
+        name = self.find_symbol_name(code, cursor_pos)
 
-        if '`' not in name:
-            name = 'System`' + name
+        if name is None:
+            return {'status': 'error'}
 
         try:
             instance = builtins[name]
         except KeyError:
             return {'status': 'ok', 'found': False, 'data': {}, 'metadata': {}}
 
-        doc = Doc(instance.__doc__ or '')    # TODO Handle possible ValueError here
-        data = {'text/plain': doc.text(detail_level), 'text/html': doc.html()}        # TODO 'application/x-tex': doc.latex()
+        doc = Doc(instance.__doc__ or '')
+        data = {
+            'text/plain': str(doc),
+            # TODO latex
+            # TODO html
+        }
         return {'status': 'ok', 'found': True, 'data': data, 'metadata': {}}
 
     def do_is_complete(self, code):
@@ -100,3 +103,40 @@ class MathicsKernel(Kernel):
             return {'status': 'invalid'}
         else:
             return {'status': 'complete'}
+
+    @staticmethod
+    def find_symbol_name(code, cursor_pos):
+        '''
+        Given a string of code tokenize it until cursor_pos and return the final symbol name.
+        returns None if no symbol is found at cursor_pos.
+
+        >>> MathicsKernel.find_symbol_name('1 + Sin', 6)
+        'System`Sin'
+
+        >>> MathicsKernel.find_symbol_name('1 + ` Sin[Cos[2]] + x', 8)
+        'System`Sin'
+
+        >>> MathicsKernel.find_symbol_name('Sin `', 4)
+        '''
+
+        scanner = MathicsScanner()
+        scanner.build()
+        scanner.lexer.input(code)
+
+        name = None
+        while True:
+            try:
+                token = scanner.lexer.token()
+            except ScanError:
+                scanner.lexer.skip(1)
+                continue
+            if token is None:
+                break   # ran out of tokens
+            # find first token which contains cursor_pos
+            if scanner.lexer.lexpos >= cursor_pos:
+                if token.type == 'symbol':
+                    name = token.value
+                    if '`' not in name:
+                        name = 'System`' + name
+                break
+        return name
