@@ -75,10 +75,13 @@ class MathicsKernel(Kernel):
         self.send_response(self.iopub_socket, 'execute_result', content)
 
     def do_inspect(self, code, cursor_pos, detail_level=0):
-        name = self.find_symbol_name(code, cursor_pos)
+        start_pos, end_pos, name = self.find_symbol_name(code, cursor_pos)
 
         if name is None:
             return {'status': 'error'}
+
+        if '`' not in name:
+            name = 'System`' + name
 
         try:
             instance = builtins[name]
@@ -92,6 +95,34 @@ class MathicsKernel(Kernel):
             # TODO html
         }
         return {'status': 'ok', 'found': True, 'data': data, 'metadata': {}}
+
+    def do_complete(self, code, cursor_pos):
+        start_pos, end_pos, name = self.find_symbol_name(code, cursor_pos)
+
+        if name is None:
+            return {'status': 'error'}
+
+        remove_system = False
+        system_prefix = 'System`'
+        if '`' not in name:
+            name =  system_prefix + name
+            remove_system = True
+
+        matches = []
+        for key in builtins:
+            if key.startswith(name):
+                matches.append(key)
+
+        if remove_system:
+            matches = [match[len(system_prefix):] for match in matches]
+
+        return {
+            'status': 'ok',
+            'matches': matches,
+            'cursor_start': start_pos,
+            'cursor_end': end_pos,
+            'metadata': {},
+        }
 
     def do_is_complete(self, code):
         try:
@@ -123,6 +154,8 @@ class MathicsKernel(Kernel):
         scanner.build()
         scanner.lexer.input(code)
 
+        start_pos = None
+        end_pos = None
         name = None
         while True:
             try:
@@ -136,7 +169,7 @@ class MathicsKernel(Kernel):
             if scanner.lexer.lexpos >= cursor_pos:
                 if token.type == 'symbol':
                     name = token.value
-                    if '`' not in name:
-                        name = 'System`' + name
+                    start_pos = token.lexpos
+                    end_pos = scanner.lexer.lexpos
                 break
-        return name
+        return start_pos, end_pos, name
