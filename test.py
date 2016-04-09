@@ -25,8 +25,10 @@ class MyKernelTests(jupyter_kernel_test.KernelTests):
     # Tab completions: in each dictionary, text is the input, which it will
     # try to complete from the end of. matches is the collection of results
     # it should expect.
-    # TODO
-    # completion_samples = []
+    completion_samples = [
+        {'text': 'Sin', 'matches': ['Sin', 'SingularValueDecomposition', 'Sinh']},
+        {'text': 'System`Pl', 'matches': ['System`Plus', 'System`Plot', 'System`Plot3D']},
+    ]
 
     # Code completeness: samples grouped by expected result
     complete_code_samples = [
