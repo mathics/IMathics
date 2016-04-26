@@ -2,6 +2,7 @@ import sys
 import traceback
 
 from ipykernel.kernelbase import Kernel
+from ipykernel.comm import CommManager
 
 from mathics.core.definitions import Definitions
 from mathics.core.evaluation import Evaluation, Message, Result
@@ -27,6 +28,13 @@ class MathicsKernel(Kernel):
         Kernel.__init__(self, **kwargs)
         self.definitions = Definitions(add_builtin=True)        # TODO Cache
         self.definitions.set_ownvalue('$Line', Integer(0))  # Reset the line number
+        self.establish_comm_manager()  # needed for ipywidgets and Manipulate[]
+
+    def establish_comm_manager(self):
+        self.comm_manager = CommManager(parent=self, kernel=self)
+        comm_msg_types = ['comm_open', 'comm_msg', 'comm_close']
+        for msg_type in comm_msg_types:
+            self.shell_handlers[msg_type] = getattr(self.comm_manager, msg_type)
 
     def do_execute(self, code, silent, store_history=True, user_expressions=None,
                    allow_stdin=False):
@@ -37,7 +45,8 @@ class MathicsKernel(Kernel):
             'user_expressions': {},
         }
 
-        evaluation = Evaluation(self.definitions, result_callback=self.result_callback, out_callback=self.out_callback)
+        evaluation = Evaluation(self.definitions, result_callback=self.result_callback,
+                                out_callback=self.out_callback, kernel=self)
         try:
             results = evaluation.parse_evaluate(code, timeout=settings.TIMEOUT)
         except Exception as exc:
@@ -73,6 +82,19 @@ class MathicsKernel(Kernel):
             'metadata': result.metadata,
         }
         self.send_response(self.iopub_socket, 'execute_result', content)
+
+    def clear_output_callback(self, wait=False):
+        # see http://jupyter-client.readthedocs.org/en/latest/messaging.html
+        content = dict(wait=wait)
+        self.send_response(self.iopub_socket, 'clear_output', content)
+
+    def display_data_callback(self, result):
+        # see http://jupyter-client.readthedocs.org/en/latest/messaging.html
+        content = {
+            'data': result.data,
+            'metadata': result.metadata,
+        }
+        self.send_response(self.iopub_socket, 'display_data', content)
 
     def do_inspect(self, code, cursor_pos, detail_level=0):
         start_pos, end_pos, name = self.find_symbol_name(code, cursor_pos)
