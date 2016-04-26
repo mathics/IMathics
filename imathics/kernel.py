@@ -46,7 +46,8 @@ class MathicsKernel(Kernel):
         }
 
         evaluation = Evaluation(self.definitions, result_callback=self.result_callback,
-                                out_callback=self.out_callback, kernel=self)
+                                out_callback=self.out_callback, clear_output_callback=self.clear_output_callback,
+                                display_data_callback=self.display_data_callback)
         try:
             results = evaluation.parse_evaluate(code, timeout=settings.TIMEOUT)
         except Exception as exc:
