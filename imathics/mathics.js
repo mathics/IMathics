@@ -214,7 +214,7 @@ function createMathNode(nodeName) {
 }
 
 function debug(s) {
-    alert(s);
+    // alert(s);
 }
 
 var mathicsIdName = 'mathics_id';
@@ -294,9 +294,10 @@ function translateDOMElement(element, svg) {
 		debug('looking at node ' + nodeName);
 		object = createMathNode('mspace');
 		var width, height;
-		if (nodeName == 'svg') {
+		if (nodeName == 'svg' || nodeName == 'img') {
 			width = dom.getAttribute('width');
 			height = dom.getAttribute('height');
+			debug('found ' + nodeName + ': ' + width + '/' + height);
 		} else {
 			// TODO: calculate appropriate height and recalculate on every view change
 			width = height = '400';
