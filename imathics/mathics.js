@@ -74,61 +74,6 @@ function $T(text) {
 	return document.createTextNode(text);
 }
 
-
-
-var deleting;
-var blurredElement;
-
-var movedItem;
-
-var clickedQuery;
-
-var lastFocus = null;
-
-function getLetterWidth(element) {
-	var letter = $E('span', $T('m'));
-	letter.setStyle({
-		fontFamily: element.getStyle('font-family'),
-		fontSize: element.getStyle('font-size')
-	});
-	var parent = $$('body')[0];
-	parent.appendChild(letter);
-	var width = letter.getWidth();
-	parent.removeChild(letter);
-	delete letter;
-	return width;
-}
-
-function refreshInputSize(textarea) {
-	var letterWidth = getLetterWidth(textarea);
-	var width = textarea.getWidth() - 15;
-	var lines = textarea.value.split('\n');
-	var lineCount = 0;
-	for (var index = 0; index < lines.length; ++index) {
-		var line = lines[index];
-		lineCount += Math.ceil(1.0 * (line.length + 1) * letterWidth / width);
-	}
-	textarea.rows = lineCount;
-}
-
-/*function refreshInputSizes() {
-	$$('textarea.request').each(function(textarea) {
-		refreshInputSize(textarea);
-	});
-
-	$$('#queries ul').each(function(ul) {
-		afterProcessResult(ul, 'Rerender');
-	});
-}*/
-
-function inputChange(event) {
-	refreshInputSize(this);
-}
-
-function isEmpty(textarea) {
-	return textarea.value.strip() == '' && !textarea.submitted;
-}
-
 function prepareText(text) {
 	if (text == '') {
 		text = String.fromCharCode(160);
@@ -387,6 +332,7 @@ function createLine(value) {
 
 		var container = document.createElement('div');
 		container.appendChild(el);
+		container.setAttribute("style", "display:none;");
 
 		debug('mathjax hub typeset: ' + container.innerHTML);
 
@@ -409,51 +355,13 @@ function createLine(value) {
 	}
 }
 
-function afterProcessResult(ul, command) {
+function afterProcessResult(container, command) {
 	// command is either 'Typeset' (default) or 'Rerender'
 	if (!command)
 		command = 'Typeset';
 
-    var state = {'retries': 0};
-
-	function relayout() {
-		// inject SVG and other non-MathML objects into corresponding <mspace>s
-
-        if (ul.querySelector('.MathJax_Error')) {
-            debug('mathjax hub: MathJax_Error error found');
-            // we're too early, try again later
-            if (++state.retries < 2) {
-                MathJax.Hub.Queue(relayout);
-            }
-        } else {
-            debug('mathjax hub callback: ' + ul.querySelectorAll('.mspace').length + '/' + ul.innerHTML);
-
-            var selector;
-            if (ul.querySelector('.MathJax_MathML')) { // native MathML (e.g. Firefox)
-                selector = 'mspace';
-            } else { // HTML output (Chrome etc.)
-                selector = '.mspace';
-            }
-            Array.prototype.forEach.call(ul.querySelectorAll(selector), function(mspace) {
-                var id = mspace.getAttribute(mathicsIdName);
-                var object = objects[id];
-                debug('mathjax hub callback for ' + id + " with object " + JSON.stringify(object));
-                if (object) {
-                    mspace.appendChild(object);
-                }
-            });
-        }
-	}
-
-	MathJax.Hub.Queue(relayout);
-
-	if (!MathJax.Hub.Browser.isOpera) {
-		// Opera 11.01 Build 1190 on Mac OS X 10.5.8 crashes on this call for Plot[x,{x,0,1}]
-		// => leave inner MathML untouched
-		// MathJax.Hub.Queue(['Typeset', MathJax.Hub, ul]);
-	}
-	MathJax.Hub.Queue(function() {
-		Array.prototype.forEach.call(ul.querySelectorAll('foreignObject >span >nobr >span.math'), function(math) {
+    function relayout2() {
+		Array.prototype.forEach.call(container.querySelectorAll('foreignObject >span >nobr >span.math'), function(math) {
 			var content = math.childNodes[0].childNodes[0].childNodes[0];
 			math.removeChild(math.childNodes[0]);
 			math.insertBefore(content, math.childNodes[0]);
@@ -474,366 +382,44 @@ function afterProcessResult(ul, command) {
 				foreignObject.setAttribute('y', y + 'px');
 			}
 		});
-	});
-}
-
-/*function setResult(ul, results) {
-	results.forEach(function(result) {
-		var resultUl = $E('ul', {'class': 'out'});
-		result.out.forEach(function(out) {
-			var li = $E('li', {'class': (out.message ? 'message' : 'print')});
-			if (out.message)
-				li.appendChild($T(out.prefix + ': '));
-			li.appendChild(createLine(out.text));
-			resultUl.appendChild(li);
-		});
-		if (result.result != null) {
-			var li = $E('li', {'class': 'result'}, createLine(result.result));
-			resultUl.appendChild(li);
-		}
-		ul.appendChild($E('li', {'class': 'out'}, resultUl));
-	});
-	afterProcessResult(ul);
-}*/
-
-/*function submitQuery(textarea, onfinish) {
-	$('welcomeContainer').fade({duration: 0.5});
-
-	textarea.li.addClassName('loading');
-	new Ajax.Request('/ajax/query/', {
-		method: 'post',
-		parameters: {
-			query: textarea.value
-		},
-		onSuccess: function(transport) {
-			textarea.ul.select('li[class!=request][class!=submitbutton]').invoke('deleteElement');
-			if (!transport.responseText) {
-				// A fatal Python error has occured, e.g. on 4.4329408320439^43214234345
-				// ("Fatal Python error: mp_reallocate failure")
-				// -> print overflow message
-				transport.responseText = '{"results": [{"out": [{"prefix": "General::noserver", "message": true, "tag": "noserver", "symbol": "General", "text": "<math><mrow><mtext>No server running.</mtext></mrow></math>"}]}]}';
-			}
-			var response = transport.responseText.evalJSON();
-			setResult(textarea.ul, response.results);
-			textarea.submitted = true;
-			textarea.results = response.results;
-			var next = textarea.li.nextSibling;
-			if (next)
-				next.textarea.focus();
-			else
-				createQuery();
-		},
-		onFailure: function(transport) {
-			textarea.ul.select('li[class!=request]').invoke('deleteElement');
-			var li = $E('li', {'class': 'serverError'}, $T("Sorry, an error occurred while processing your request!"));
-			textarea.ul.appendChild(li);
-			textarea.submitted = true;
-		},
-		onComplete: function() {
-			textarea.li.removeClassName('loading');
-			if (onfinish)
-				onfinish();
-		}
-	});
-}*/
-
-function getSelection() {
-	// TODO
-}
-
-/*function keyDown(event) {
-	var textarea = lastFocus;
-	if (!textarea)
-		return;
-	refreshInputSize(textarea);
-
-	if (event.keyCode == Event.KEY_RETURN && (event.shiftKey || event.keyLocation == 3)) {
-		if (!Prototype.Browser.IE)
-			event.stop();
-
-		var query = textarea.value.strip();
-		if (query) {
-			submitQuery(textarea);
-		}
-	} else if (event.keyCode == Event.KEY_UP) {
-		if (textarea.selectionStart == 0 && textarea.selectionEnd == 0) {
-			if (isEmpty(textarea)) {
-				if (textarea.li.previousSibling)
-					textarea.li.previousSibling.textarea.focus();
-			} else
-				createQuery(textarea.li);
-		}
-	} else if (event.keyCode == Event.KEY_DOWN) {
-		if (textarea.selectionStart == textarea.value.length && textarea.selectionEnd == textarea.selectionStart) {
-			if (isEmpty(textarea)) {
-				if (textarea.li.nextSibling)
-					textarea.li.nextSibling.textarea.focus();
-			} else
-				createQuery(textarea.li.nextSibling);
-		}
-	} else
-		if (isGlobalKey(event))
-			event.stop();
-}*/
-
-/*function deleteMouseDown(event) {
-	if (event.isLeftClick())
-		deleting = true;
-}
-
-function deleteClick(event) {
-	if (lastFocus == this.li.textarea)
-		lastFocus = null;
-	this.li.deleteElement();
-	deleting = false;
-	if (blurredElement) {
-		blurredElement.focus();
-		blurredElement = null;
 	}
-	if ($('queries').childElements().length == 0)
-		createQuery();
-}
 
-function moveMouseDown(event) {
-	movedItem = this.li;
-	movedItem.addClassName('moving');
-}
+    var state = {'retries': 0};
 
-function moveMouseUp(event) {
-	if (movedItem) {
-		movedItem.removeClassName('moving');
-		movedItem.textarea.focus();
-		movedItem = null;
+	function relayout() {
+		// inject SVG and other non-MathML objects into corresponding <mspace>s
+
+        if (container.querySelector('.MathJax_Error')) {
+            debug('mathjax hub: MathJax_Error error found');
+            // we're too early, try again later
+            if (++state.retries < 2) {
+                MathJax.Hub.Queue(relayout);
+            } else {
+                container.setAttribute('style', ''); // display
+            }
+        } else {
+            debug('mathjax hub callback: ' + container.querySelectorAll('.mspace').length + '/' + container.innerHTML);
+
+            var selector;
+            if (container.querySelector('.MathJax_MathML')) { // native MathML (e.g. Firefox)
+                selector = 'mspace';
+            } else { // HTML output (Chrome etc.)
+                selector = '.mspace';
+            }
+            Array.prototype.forEach.call(container.querySelectorAll(selector), function(mspace) {
+                var id = mspace.getAttribute(mathicsIdName);
+                var object = objects[id];
+                debug('mathjax hub callback for ' + id + " with object " + JSON.stringify(object));
+                if (object) {
+                    mspace.appendChild(object);
+                }
+            });
+
+            relayout2();
+
+            container.setAttribute('style', ''); // display
+        }
 	}
+
+	MathJax.Hub.Queue(relayout);
 }
-
-function onFocus(event) {
-	var textarea = this;
-	textarea.li.addClassName('focused');
-	lastFocus = textarea;
-}
-
-function onBlur(event) {
-	var textarea = this;
-	blurredElement = textarea;
-	if (!deleting && textarea.li != movedItem && isEmpty(textarea) && $('queries').childElements().length > 1) {
-		textarea.li.hide();
-		if (textarea == lastFocus)
-			lastFocus = null;
-		window.setTimeout(function() {
-			textarea.li.deleteElement();
-		}, 10);
-	}
-	textarea.li.removeClassName('focused');
-}
-
-function createSortable() {
-	Position.includeScrollOffsets = true;
-  Sortable.create('queries', {
-    handle: 'move',
-    scroll: 'document',
-    scrollSensitivity: 1	// otherwise strange flying-away of item at top
-  });
-}
-
-var queryIndex = 0;
-*/
-/*function createQuery(before, noFocus, updatingAll) {
-	var ul, textarea, moveHandle, deleteHandle, submitButton;
-	// Items need id in order for Sortable.onUpdate to work.
-	var li = $E('li', {'id': 'query_' + queryIndex++, 'class': 'query'},
-		ul = $E('ul', {'class': 'query'},
-			$E('li', {'class': 'request'},
-				textarea = $E('textarea', {'class': 'request'}),
-				$E('span', {'class': 'submitbutton', 'title': "Submit [Shift+Return]"},
-					submitButton = $E('span', $T('='))
-				)
-			)
-		),
-		moveHandle = $E('span', {'class': 'move'}),
-		deleteHandle = $E('span', {'class': 'delete', 'title': "Delete"}, $T(String.fromCharCode(215)))
-	);
-	textarea.rows = 1;
-	textarea.ul = ul;
-	textarea.li = li;
-	textarea.submitted = false;
-	moveHandle.li = li;
-	deleteHandle.li = li;
-	li.textarea = textarea;
-	li.ul = ul;
-	if (before)
-		$('queries').insertBefore(li, before);
-	else
-		$('queries').appendChild(li);
-	if (!updatingAll)
-		refreshInputSize(textarea);
-	new Form.Element.Observer(textarea, 0.2, inputChange.bindAsEventListener(textarea));
-	textarea.observe('focus', onFocus.bindAsEventListener(textarea));
-	textarea.observe('blur', onBlur.bindAsEventListener(textarea));
-	li.observe('mousedown', queryMouseDown.bindAsEventListener(li));
-	deleteHandle.observe('click', deleteClick.bindAsEventListener(deleteHandle));
-	deleteHandle.observe('mousedown', deleteMouseDown.bindAsEventListener(deleteHandle));
-	moveHandle.observe('mousedown', moveMouseDown.bindAsEventListener(moveHandle));
-	moveHandle.observe('mouseup', moveMouseUp.bindAsEventListener(moveHandle));
-	$(document).observe('mouseup', moveMouseUp.bindAsEventListener($(document)));
-	submitButton.observe('mousedown', function() {
-		if (textarea.value.strip())
-			submitQuery(textarea);
-		else
-			window.setTimeout(function() {
-				textarea.focus();
-			}, 10);
-	});
-	if (!updatingAll) {
-		createSortable();
-		// calling directly fails in Safari on document loading
-		//window.setTimeout(createSortable, 10);
-	}
-	// Immediately setting focus doesn't work in IE.
-	if (!noFocus)
-		window.setTimeout(function() {
-			textarea.focus();
-		}, 10);
-	return li;
-}*/
-/*
-var mouseDownEvent = null;
-
-function documentMouseDown(event) {
-	if (event.isLeftClick()) {
-		if (clickedQuery) {
-			clickedQuery = null;
-			mouseDownEvent = null;
-			return;
-		}
-		event.stop(); // strangely, doesn't work otherwise
-		mouseDownEvent = event;
-	}
-}
-*/
-/*function documentClick(event) {
-	// In Firefox, mousedown also fires when user clicks scrollbars.
-	// -> listen to click
-	event = mouseDownEvent;
-	if (!event)
-		return;
-	if ($('queries').childElements().length == 1 && isEmpty($('queries').childElements()[0].textarea)) {
-		$('queries').childElements()[0].textarea.focus();
-		return;
-	}
-	var offset = $('document').cumulativeOffset();
-	var y = event.pointerY() - offset.top + $('document').scrollTop;
-	var element = null;
-	$('queries').childElements().forEach(function(li) {
-		var offset = li.positionedOffset(); // margin-top: 10px
-		if (offset.top + 20 > y) {
-			element = li;
-			throw $break;
-		}
-	});
-	createQuery(element);
-}*/
-/*
-function queryMouseDown(event) {
-	clickedQuery = this;
-}
-
-function focusLast() {
-	if (lastFocus)
-		lastFocus.focus();
-	else
-		createQuery();
-}
-
-function isGlobalKey(event) {
-	if (event.ctrlKey) {
-		switch(event.keyCode) {
-		case 68:
-		case 67:
-		case 83:
-		case 79:
-			return true;
-		}
-	}
-	return false;
-}
-
-function globalKeyUp(event) {
-	if (!popup && event.ctrlKey) {
-		switch (event.keyCode) {
-		case 68: // D
-			$('search').select();
-			event.stop();
-			break;
-		case 67: // C
-			focusLast();
-			event.stop();
-			break;
-		case 83: // S
-			showSave();
-			break;
-		case 79: // O
-			showOpen();
-			break;
-		}
-	}
-}
-
-function domLoaded() {
-	MathJax.Hub.Config({
-		"HTML-CSS": {
-			imageFont: null,
-	  	linebreaks: { automatic: true }
-	  },
-	  MMLorHTML: {
-	    //
-	    //  The output jax that is to be preferred when both are possible
-	    //  (set to "MML" for native MathML, "HTML" for MathJax's HTML-CSS output jax).
-	    //
-	    prefer: {
-	      MSIE:    "HTML",
-	      Firefox: "HTML",
-	      Opera:   "HTML",
-	      other:   "HTML"
-	    }
-	  }
-	});
-	MathJax.Hub.Configured();
-
-	if ($('welcomeBrowser'))
-		if (!(Prototype.Browser.WebKit || Prototype.Browser.MobileSafari || Prototype.Browser.Gecko))
-			$('welcomeBrowser').show();
-
-	$$('body')[0].observe('resize', refreshInputSizes);
-
-	if ($('queriesContainer')) {
-		$('queriesContainer').appendChild($E('ul', {'id': 'queries'}));
-
-		$('document').observe('mousedown', documentMouseDown.bindAsEventListener($('document')));
-		$('document').observe('click', documentClick.bindAsEventListener($('document')));
-
-		$(document).observe('keydown', keyDown.bindAsEventListener());
-		if (Prototype.Browser.IE) {
-			document.body.addEventListener('keydown', function(event) {
-				if (event.keyCode == Event.KEY_RETURN && event.shiftKey) {
-					event.stopPropagation();
-					event.preventDefault();
-					keyDown(event);
-				}
-			}, true);
-		}
-		if (Prototype.Browser.Opera || Prototype.Browser.IE) {
-			// Opera needs another hook so it doesn't insert newlines after Shift+Return
-			$(document).observe('keypress', function(event) {
-				if (event.keyCode == Event.KEY_RETURN && event.shiftKey)
-					event.stop();
-			}.bindAsEventListener());
-		}
-
-		$(document).observe('keyup', globalKeyUp.bindAsEventListener($('document')));
-
-		if (!loadLink())
-			createQuery();
-	}
-}
-*/
