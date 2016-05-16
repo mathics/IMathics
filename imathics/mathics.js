@@ -355,8 +355,7 @@ function translateDOMElement(element, svg) {
 function createLine(value) {
 	if (value.startsWith('<math')) {
 		//value = '<math><mspace width="350.000000px" height="350.000000px" id="math_object_0"></mspace></math>';
-		/*value = '<math><mtable><mtr><mtd><mi>1' +
-	    	'</mi></mtd></mtr></mtable></math>';*/
+		// value = '<math><mtable><mtr><mtd><mn>1</mn></mtd></mtr></mtable></math>';
 
 		var dom = document.createElement('div');
 
@@ -381,9 +380,9 @@ function createLine(value) {
 
     	MathJax.Hub.Queue(['Typeset', MathJax.Hub, container]);
 
-		MathJax.Hub.Register.StartupHook("End",function () {
-    		afterProcessResult(container);
-		});
+    	afterProcessResult(container);
+		//MathJax.Hub.Register.StartupHook("End",function () {
+		//});
 
 		return container;
 	} else {
@@ -402,22 +401,37 @@ function afterProcessResult(ul, command) {
 	// command is either 'Typeset' (default) or 'Rerender'
 	if (!command)
 		command = 'Typeset';
-	MathJax.Hub.Queue(function() {
+
+    var state = {'retries': 0};
+
+	function relayout() {
 		// inject SVG and other non-MathML objects into corresponding <mspace>s
-		// alert('mathjax hub callback: ' + ul.querySelectorAll('.mspace').length + '/' + ul.innerHTML);
-		Array.prototype.forEach.call(ul.querySelectorAll('.mspace'), function(mspace) {
-			var id = mspace.getAttribute('mathics_id').substr(objectsPrefix.length);
-        	// alert('mathjax hub callback for ' + id);
-			var object = objects[id];
-			if (object) {
-    			mspace.appendChild(object);
-    		}
-		});
-	});
+
+        if (ul.querySelector('.MathJax_Error')) {
+            // alert('mathjax hub: MathJax_Error error found');
+            // we're too early, try again later
+            if (++state.retries < 2) {
+                MathJax.Hub.Queue(relayout);
+            }
+        } else {
+            // alert('mathjax hub callback: ' + ul.querySelectorAll('.mspace').length + '/' + ul.innerHTML);
+            Array.prototype.forEach.call(ul.querySelectorAll('.mspace'), function(mspace) {
+                var id = mspace.getAttribute('mathics_id').substr(objectsPrefix.length);
+                // alert('mathjax hub callback for ' + id);
+                var object = objects[id];
+                if (object) {
+                    mspace.appendChild(object);
+                }
+            });
+        }
+	}
+
+	MathJax.Hub.Queue(relayout);
+
 	if (!MathJax.Hub.Browser.isOpera) {
 		// Opera 11.01 Build 1190 on Mac OS X 10.5.8 crashes on this call for Plot[x,{x,0,1}]
 		// => leave inner MathML untouched
-		MathJax.Hub.Queue(['Typeset', MathJax.Hub, ul]);
+		// MathJax.Hub.Queue(['Typeset', MathJax.Hub, ul]);
 	}
 	MathJax.Hub.Queue(function() {
 		Array.prototype.forEach.call(ul.querySelectorAll('foreignObject >span >nobr >span.math'), function(math) {
