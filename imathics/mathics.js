@@ -213,7 +213,11 @@ function createMathNode(nodeName) {
 	}
 }
 
-var objectsPrefix = 'math_object_';
+function debug(s) {
+    alert(s);
+}
+
+var mathicsIdName = 'mathics_id';
 var objectsCount = 0;
 var objects = {};
 
@@ -223,7 +227,12 @@ function translateDOMElement(element, svg) {
 		return $T(text);
 	}
 	var dom = null;
-	var nodeName = element.nodeName;
+	var nodeName = element.nodeName.toLowerCase();
+	if (nodeName == 'mtext' && element.childNodes[0].nodeName.toLowerCase() == 'img') {
+	    debug('detected special case <mtext><img></mtext>');
+	    return translateDOMElement(element.childNodes[0]);  // remove <mtext> here
+	}
+
 	if (nodeName != 'meshgradient' && nodeName != 'graphics3d') {
 		dom = createMathNode(element.nodeName);
 		for (var i = 0; i < element.attributes.length; ++i) {
@@ -232,7 +241,7 @@ function translateDOMElement(element, svg) {
 				dom.setAttribute(attr.nodeName, attr.nodeValue);
 		}
 	}
-	if (nodeName == 'foreignObject') {
+	if (nodeName == 'foreignobject') {
 		dom.setAttribute('width', svg.getAttribute('width'));
 		dom.setAttribute('height', svg.getAttribute('height'));
 		dom.setAttribute('style', dom.getAttribute('style') + '; text-align: left; padding-left: 2px; padding-right: 2px;');
@@ -280,8 +289,9 @@ function translateDOMElement(element, svg) {
 		drawGraphics3D(div, data);
 		dom = div;
 	}
-	if (nodeName == 'svg' || nodeName == 'graphics3d') {
+	if (nodeName == 'svg' || nodeName == 'graphics3d' || nodeName == 'img') {
 		// create <mspace> that will contain the graphics
+		debug('looking at node ' + nodeName);
 		object = createMathNode('mspace');
 		var width, height;
 		if (nodeName == 'svg') {
@@ -345,7 +355,8 @@ function translateDOMElement(element, svg) {
 		});
 	if (object) {
 		var id = objectsCount++;
-		object.setAttribute('mathics_id', objectsPrefix + id);
+		// debug('adding object to id ' + id);
+		object.setAttribute(mathicsIdName, id);
 		objects[id] = dom;
 		return object;
 	}
@@ -376,7 +387,7 @@ function createLine(value) {
 		var container = document.createElement('div');
 		container.appendChild(el);
 
-		// alert('mathjax hub typeset: ' + container.innerHTML);
+		debug('mathjax hub typeset: ' + container.innerHTML);
 
     	MathJax.Hub.Queue(['Typeset', MathJax.Hub, container]);
 
@@ -408,17 +419,24 @@ function afterProcessResult(ul, command) {
 		// inject SVG and other non-MathML objects into corresponding <mspace>s
 
         if (ul.querySelector('.MathJax_Error')) {
-            // alert('mathjax hub: MathJax_Error error found');
+            debug('mathjax hub: MathJax_Error error found');
             // we're too early, try again later
             if (++state.retries < 2) {
                 MathJax.Hub.Queue(relayout);
             }
         } else {
-            // alert('mathjax hub callback: ' + ul.querySelectorAll('.mspace').length + '/' + ul.innerHTML);
-            Array.prototype.forEach.call(ul.querySelectorAll('.mspace'), function(mspace) {
-                var id = mspace.getAttribute('mathics_id').substr(objectsPrefix.length);
-                // alert('mathjax hub callback for ' + id);
+            debug('mathjax hub callback: ' + ul.querySelectorAll('.mspace').length + '/' + ul.innerHTML);
+
+            var selector;
+            if (ul.querySelector('.MathJax_MathML')) { // native MathML (e.g. Firefox)
+                selector = 'mspace';
+            } else { // HTML output (Chrome etc.)
+                selector = '.mspace';
+            }
+            Array.prototype.forEach.call(ul.querySelectorAll(selector), function(mspace) {
+                var id = mspace.getAttribute(mathicsIdName);
                 var object = objects[id];
+                debug('mathjax hub callback for ' + id + " with object " + JSON.stringify(object));
                 if (object) {
                     mspace.appendChild(object);
                 }
