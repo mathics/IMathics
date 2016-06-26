@@ -7,7 +7,9 @@ from ipykernel.comm import CommManager
 from mathics.core.definitions import Definitions
 from mathics.core.evaluation import Evaluation, Message, Result
 from mathics.core.expression import Integer
-from mathics.core.parser import parse_lines, IncompleteSyntaxError, TranslateError, MathicsScanner, ScanError
+from mathics.core.parser import IncompleteSyntaxError, TranslateError, MultiLineFeeder
+from mathics.core.parser.util import parser
+from mathics.core.parser.tokeniser import Tokeniser
 from mathics.builtin import builtins
 from mathics import settings
 from mathics.version import __version__
@@ -29,6 +31,7 @@ class MathicsKernel(Kernel):
         self.definitions = Definitions(add_builtin=True)        # TODO Cache
         self.definitions.set_ownvalue('$Line', Integer(0))  # Reset the line number
         self.establish_comm_manager()  # needed for ipywidgets and Manipulate[]
+        self._feeder = MultiLineFeeder('')
 
     def establish_comm_manager(self):
         self.comm_manager = CommManager(parent=self, kernel=self)
@@ -148,18 +151,18 @@ class MathicsKernel(Kernel):
         }
 
     def do_is_complete(self, code):
-        try:
-            # list forces generator evaluation (parse all lines)
-            list(parse_lines(code, self.definitions))
-        except IncompleteSyntaxError:
-            return {'status': 'incomplete', 'indent': ''}
-        except TranslateError:
-            return {'status': 'invalid'}
-        else:
-            return {'status': 'complete'}
+        feeder = MultiLineFeeder(code)
+        while not feeder.empty():
+            try:
+                ast = parser.parse(feeder)
+            except IncompleteSyntaxError:
+                return {'status': 'incomplete', 'indent': ''}
+            except TranslateError:
+                return {'status': 'invalid'}
+            else:
+                return {'status': 'complete'}
 
-    @staticmethod
-    def find_symbol_name(code, cursor_pos):
+    def find_symbol_name(self, code, cursor_pos):
         '''
         Given a string of code tokenize it until cursor_pos and return the final symbol name.
         returns None if no symbol is found at cursor_pos.
@@ -172,27 +175,12 @@ class MathicsKernel(Kernel):
 
         >>> MathicsKernel.find_symbol_name('Sin `', 4)
         '''
-
-        scanner = MathicsScanner()
-        scanner.build()
-        scanner.lexer.input(code)
-
-        start_pos = None
-        end_pos = None
-        name = None
-        while True:
-            try:
-                token = scanner.lexer.token()
-            except ScanError:
-                scanner.lexer.skip(1)
-                continue
-            if token is None:
-                break   # ran out of tokens
-            # find first token which contains cursor_pos
-            if scanner.lexer.lexpos >= cursor_pos:
-                if token.type == 'symbol':
-                    name = token.value
-                    start_pos = token.lexpos
-                    end_pos = scanner.lexer.lexpos
+        feeder = MultiLineFeeder(code)
+        tokeniser = Tokeniser(feeder)
+        while tokeniser.pos < cursor_pos:
+            token = tokeniser.next()
+            if token.tag == 'END':
                 break
-        return start_pos, end_pos, name
+        if token.tag == 'Symbol':
+            return token.pos, tokeniser.pos, token.text
+        return None, None, None
