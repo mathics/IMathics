@@ -5,15 +5,59 @@ from ipykernel.kernelbase import Kernel
 from ipykernel.comm import CommManager
 
 from mathics.core.definitions import Definitions
-from mathics.core.evaluation import Evaluation, Message, Result
+from mathics.core.evaluation import Evaluation, Message, Result, Callbacks
 from mathics.core.expression import Integer
-from mathics.core.parser import parse_lines, IncompleteSyntaxError, TranslateError, MathicsScanner, ScanError
+from mathics.core.parser import IncompleteSyntaxError, TranslateError, ScanError
+from mathics.core.parser.util import parse
+from mathics.core.parser.feed import SingleLineFeeder
+from mathics.core.parser.tokeniser import Tokeniser
 from mathics.builtin import builtins
 from mathics import settings
 from mathics.version import __version__
 from mathics.doc.doc import Doc
 import os
 import base64
+
+
+def parse_lines(lines, definitions):
+    '''
+    Given some lines of code try to construct a list of expressions.
+
+    In the case of incomplete lines append more lines until a complete
+    expression is found. If the end is reached and no complete expression is
+    found then reraise the exception.
+
+    We use a generator so that each expression can be evaluated (as the parser
+    is dependent on defintions and evaluation may change the definitions).
+    '''
+    query = ''
+    lines = lines.splitlines()
+
+    incomplete_exc = None
+    for line in lines:
+        if not line:
+            query += ' '
+            continue
+        query += line
+        if query.endswith('\\'):
+            query = query.rstrip('\\')
+            incomplete_exc = IncompleteSyntaxError(len(query)-1)
+            continue
+        try:
+            expression = parse(SingleLineFeeder(lines), definitions)
+        except IncompleteSyntaxError as exc:
+            incomplete_exc = exc
+        else:
+            if expression is not None:
+                yield expression
+            query = ''
+            incomplete_exc = None
+
+    if incomplete_exc is not None:
+        # ran out of lines
+        raise incomplete_exc
+
+    raise StopIteration
 
 
 class MathicsKernel(Kernel):
@@ -47,20 +91,27 @@ class MathicsKernel(Kernel):
             'user_expressions': {},
         }
 
-        evaluation = Evaluation(self.definitions, result_callback=self.result_callback,
-                                out_callback=self.out_callback, clear_output_callback=self.clear_output_callback,
-                                display_data_callback=self.display_data_callback)
+        formats = {
+            'text/plain': 'text',
+            'text/html': 'xml',
+            'text/latex': 'tex',
+        }
+
+        evaluation = Evaluation(self.definitions, callbacks=Callbacks(out=self.out_callback), format=formats)
         try:
-            results = evaluation.parse_evaluate(code, timeout=settings.TIMEOUT)
+            result = evaluation.parse_evaluate(code, timeout=settings.TIMEOUT)
+            if result:
+                self.result_callback(result)
         except Exception as exc:
             # internal error
             response['status'] = 'error'
             response['ename'] = 'System:exception'
             response['traceback'] = traceback.format_exception(*sys.exc_info())
-            results = []
+            result = []
         else:
             response['status'] = 'ok'
         response['execution_count'] = self.definitions.get_line_no()
+
         return response
 
     def out_callback(self, out):
@@ -79,40 +130,40 @@ class MathicsKernel(Kernel):
         self.send_response(self.iopub_socket, 'stream', content)
 
     def result_callback(self, result):
-        mathics_js = ""
+        if False:
+            mathics_js = ""
 
-        with open(os.path.dirname(os.path.abspath(__file__)) + '/mathics.js', 'r') as f:
-            mathics_js += f.read()
+            with open(os.path.dirname(os.path.abspath(__file__)) + '/mathics.js', 'r') as f:
+                mathics_js += f.read()
 
-        html = result.data['text/html']
+            html = result.result['text/html']
 
-        js = "<span id='myAnchor'></span><script>" + mathics_js + """var f = function() {
+            js = "<span id='myAnchor'></span><script>" + mathics_js + """var f = function() {
 
-        var myAnchor = document.getElementById("myAnchor");
-        var el = document.createElement('span');
+            var myAnchor = document.getElementById("myAnchor");
+            var el = document.createElement('span');
 
-        var node = createLine(window.atob('""" + base64.b64encode(html.encode('utf8')).decode('ascii') + """'));
+            var node = createLine(window.atob('""" + base64.b64encode(html.encode('utf8')).decode('ascii') + """'));
 
-        /*el.innerHTML = "<span>oh my test</span>";*/
+            myAnchor.parentNode.replaceChild(node, myAnchor);
 
-        myAnchor.parentNode.replaceChild(node, myAnchor);
+            }; f();
 
-        /*myAnchor.appendChild(el);*/
+            </script>
+            """   # result.data['text/html'])
 
-        }; f();
+            data = {'text/html': js}
+        else:
+            html = result.result['text/html']
 
-        </script>
-        """   # result.data['text/html'])
+            # see https://github.com/mathjax/MathJax/issues/896
 
-        # js = "var cell = Jupyter.notebook.insert_cell_at_bottom('markdown'); cell.set_text(text);"
-        # js = "<script>Jupyter.notebook.get_selected_cell().set_text('hello!');</script>"
-
-        data = {'text/html': js}
+            data = {'text/html': html}
 
         content = {
             'execution_count': result.line_no,
             'data': data,  # result.data,
-            'metadata': result.metadata,
+            'metadata': {},
         }
         self.send_response(self.iopub_socket, 'execute_result', content)
 
@@ -205,26 +256,23 @@ class MathicsKernel(Kernel):
         >>> MathicsKernel.find_symbol_name('Sin `', 4)
         '''
 
-        scanner = MathicsScanner()
-        scanner.build()
-        scanner.lexer.input(code)
+        tokeniser = Tokeniser(SingleLineFeeder(code))
 
         start_pos = None
         end_pos = None
         name = None
         while True:
             try:
-                token = scanner.lexer.token()
+                token = tokeniser.next()
             except ScanError:
-                scanner.lexer.skip(1)
                 continue
-            if token is None:
+            if token.tag == 'END':
                 break   # ran out of tokens
             # find first token which contains cursor_pos
-            if scanner.lexer.lexpos >= cursor_pos:
-                if token.type == 'symbol':
-                    name = token.value
-                    start_pos = token.lexpos
-                    end_pos = scanner.lexer.lexpos
+            if tokeniser.pos >= cursor_pos:
+                if token.tag == 'Symbol':
+                    name = token.text
+                    start_pos = token.pos
+                    end_pos = tokeniser.pos
                 break
         return start_pos, end_pos, name

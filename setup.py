@@ -77,6 +77,10 @@ setup(
 
     packages=['imathics'],
 
+    package_data= {
+        'imathics': ['mathics.js'],
+    },
+
     install_requires=INSTALL_REQUIRES,
 
     entry_points={

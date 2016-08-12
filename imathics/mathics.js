@@ -304,6 +304,7 @@ function translateDOMElement(element, svg) {
 		// debug('adding object to id ' + id);
 		object.setAttribute(mathicsIdName, id);
 		objects[id] = dom;
+		debug('setting object ' + id + ' to ' + dom + '/' + JSON.stringify(objects));
 		return object;
 	}
 	return dom;
@@ -398,22 +399,31 @@ function afterProcessResult(container, command) {
                 container.setAttribute('style', ''); // display
             }
         } else {
-            debug('mathjax hub callback: ' + container.querySelectorAll('.mspace').length + '/' + container.innerHTML);
+            var selector = 'script[type="math/mml"]';
 
-            var selector;
-            if (container.querySelector('.MathJax_MathML')) { // native MathML (e.g. Firefox)
-                selector = 'mspace';
-            } else { // HTML output (Chrome etc.)
-                selector = '.mspace';
-            }
-            Array.prototype.forEach.call(container.querySelectorAll(selector), function(mspace) {
-                var id = mspace.getAttribute(mathicsIdName);
-                var object = objects[id];
-                debug('mathjax hub callback for ' + id + " with object " + JSON.stringify(object));
-                if (object) {
-                    mspace.appendChild(object);
-                }
-            });
+            debug('mathjax hub callback: ' + container.querySelectorAll(selector).length + '/' + container.innerHTML);
+
+            /* example:
+            <script type="math/mml" id="MathJax-Element-2"><math><mstyle displaystyle="true">
+            <mtable><mtr><mtd><mspace width="350.000000px" height="350.000000px" mathics_id="0"></mspace>
+            */
+
+            /*Array.prototype.forEach.call(container.querySelectorAll(selector), function(script) {
+                var el = document.createElement('html');
+                el.innerHTML = script.innerHTML;
+
+                Array.prototype.forEach.call(el.querySelectorAll('mspace'), function(mspace) {
+                    var id = mspace.getAttribute(mathicsIdName);
+                    var object = objects[parseInt(id)];
+                    debug('mathjax hub callback for ' + id + " with object " + JSON.stringify(object) + " / " + JSON.stringify(objects));
+                    if (object) {
+                        mspace.appendChild(object);
+                    }
+                });
+
+
+                //script.innerHTML = '<math><mtext>12345</mtext></math>'; // el.innerHTML;
+            });*/
 
             relayout2();
 
