@@ -130,6 +130,19 @@ class MathicsKernel(Kernel):
         self.send_response(self.iopub_socket, 'stream', content)
 
     def result_callback(self, result):
+        safeModeJS = """<script>
+            MathJax.Hub.Config({
+              Safe: {
+                  safeProtocols: {
+                    data: true
+                  },
+                  allow: {
+                    fontsize: "all"
+                  }
+                }
+          });
+        </script>"""
+
         if False:
             mathics_js = ""
 
@@ -158,7 +171,7 @@ class MathicsKernel(Kernel):
 
             # see https://github.com/mathjax/MathJax/issues/896
 
-            data = {'text/html': html}
+            data = {'text/html': safeModeJS + html}
 
         content = {
             'execution_count': result.line_no,
