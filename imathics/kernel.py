@@ -5,7 +5,7 @@ from ipykernel.kernelbase import Kernel
 from ipykernel.comm import CommManager
 
 from mathics.core.definitions import Definitions
-from mathics.core.evaluation import Evaluation, Message, Result, Callbacks
+from mathics.core.evaluation import Evaluation, Message, Result, Output
 from mathics.core.expression import Integer
 from mathics.core.parser import IncompleteSyntaxError, TranslateError, ScanError
 from mathics.core.parser.util import parse
@@ -15,6 +15,8 @@ from mathics.builtin import builtins
 from mathics import settings
 from mathics.version import __version__
 from mathics.doc.doc import Doc
+
+from string import Template
 import os
 import base64
 
@@ -60,6 +62,46 @@ def parse_lines(lines, definitions):
     raise StopIteration
 
 
+class KernelOutput(Output):
+    svg = Template('''
+        <svg xmlns:svg="http://www.w3.org/2000/svg"
+            xmlns="http://www.w3.org/2000/svg"
+            version="1.1"
+            viewBox="$viewbox">
+            $data
+        </svg>
+    ''')
+
+    def __init__(self, kernel):
+        self.kernel = kernel
+
+    def out(self, out):
+        self.kernel.out_callback(out)
+
+    def clear_output(self, wait=False):
+        self.kernel.clear_output_callback(wait=wait)
+
+    def display_data(self, result):
+        self.kernel.display_data_callback(result)
+
+    def svg_xml(self, data, width, height, viewbox):
+        # relies on https://github.com/jupyter/notebook/pull/1680
+        svg = self.svg.substitute(
+            data=data,
+            viewbox=' '.join(['%f' % t for t in viewbox]))
+        return '<mglyph width="%dpx" height="%dpx" src="data:image/svg+xml;base64,%s"/>' % (
+            int(width),
+            int(height),
+            base64.b64encode(svg.encode('utf8')).decode('utf8'))
+
+    def img_xml(self, data, width, height):
+        # relies on https://github.com/jupyter/notebook/pull/1680
+        return '<mglyph width="%dpx" height="%dpx" src="%s"/>' % (
+            int(width),
+            int(height),
+            data)
+
+
 class MathicsKernel(Kernel):
     implementation = 'Mathics'
     implementation_version = '0.1'
@@ -97,7 +139,7 @@ class MathicsKernel(Kernel):
             'text/latex': 'tex',
         }
 
-        evaluation = Evaluation(self.definitions, callbacks=Callbacks(out=self.out_callback), format=formats)
+        evaluation = Evaluation(self.definitions, output=KernelOutput(self), format=formats)
         try:
             result = evaluation.parse_evaluate(code, timeout=settings.TIMEOUT)
             if result:
@@ -129,8 +171,46 @@ class MathicsKernel(Kernel):
             raise ValueError('Unknown out')
         self.send_response(self.iopub_socket, 'stream', content)
 
-    def result_callback(self, result):
-        safeModeJS = """<script>
+    def legacy_result_callback(self, result):
+        # this is code that tries to replicate the classic Mathics server JavaScript logic. hopefully we
+        # can find a better way.
+
+        mathics_js = ""
+
+        with open(os.path.dirname(os.path.abspath(__file__)) + '/mathics.js', 'r') as f:
+            mathics_js += f.read()
+
+        html = result.result['text/html']
+
+        js = "<span id='myAnchor'></span><script>" + mathics_js + """var f = function() {
+
+        var myAnchor = document.getElementById("myAnchor");
+        var el = document.createElement('span');
+
+        var node = createLine(window.atob('""" + base64.b64encode(html.encode('utf8')).decode('ascii') + """'));
+
+        myAnchor.parentNode.replaceChild(node, myAnchor);
+
+        }; f();
+
+        </script>
+        """
+
+        data = {'text/html': js}
+
+        content = {
+            'execution_count': result.line_no,
+            'data': data,  # result.data,
+            'metadata': {},
+        }
+        self.send_response(self.iopub_socket, 'execute_result', content)
+
+    def reconfigure_mathjax(self):
+        # Jupyter's default MathJax configuration ("safe" mode) blocks the use
+        # of data uris which we use in mglyphs for displaying svgs and imgs.
+        # enable the "data" protocol here. also remove font size restrictions.
+
+        safeModeJS = """
             MathJax.Hub.Config({
               Safe: {
                   safeProtocols: {
@@ -141,41 +221,21 @@ class MathicsKernel(Kernel):
                   }
                 }
           });
-        </script>"""
+        """
 
-        if False:
-            mathics_js = ""
+        # see http://jupyter-client.readthedocs.org/en/latest/messaging.html
+        content = {
+            'data': {'application/javascript': safeModeJS},
+            'metadata': {},
+        }
+        self.send_response(self.iopub_socket, 'display_data', content)
 
-            with open(os.path.dirname(os.path.abspath(__file__)) + '/mathics.js', 'r') as f:
-                mathics_js += f.read()
-
-            html = result.result['text/html']
-
-            js = "<span id='myAnchor'></span><script>" + mathics_js + """var f = function() {
-
-            var myAnchor = document.getElementById("myAnchor");
-            var el = document.createElement('span');
-
-            var node = createLine(window.atob('""" + base64.b64encode(html.encode('utf8')).decode('ascii') + """'));
-
-            myAnchor.parentNode.replaceChild(node, myAnchor);
-
-            }; f();
-
-            </script>
-            """   # result.data['text/html'])
-
-            data = {'text/html': js}
-        else:
-            html = result.result['text/html']
-
-            # see https://github.com/mathjax/MathJax/issues/896
-
-            data = {'text/html': safeModeJS + html}
+    def result_callback(self, result):
+        self.reconfigure_mathjax()
 
         content = {
             'execution_count': result.line_no,
-            'data': data,  # result.data,
+            'data': result.result,
             'metadata': {},
         }
         self.send_response(self.iopub_socket, 'execute_result', content)
@@ -186,6 +246,8 @@ class MathicsKernel(Kernel):
         self.send_response(self.iopub_socket, 'clear_output', content)
 
     def display_data_callback(self, result):
+        self.reconfigure_mathjax()
+
         # see http://jupyter-client.readthedocs.org/en/latest/messaging.html
         content = {
             'data': result.data,
