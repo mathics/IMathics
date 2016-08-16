@@ -63,15 +63,6 @@ def parse_lines(lines, definitions):
 
 
 class KernelOutput(Output):
-    svg = Template('''
-        <svg xmlns:svg="http://www.w3.org/2000/svg"
-            xmlns="http://www.w3.org/2000/svg"
-            version="1.1"
-            viewBox="$viewbox">
-            $data
-        </svg>
-    ''')
-
     def __init__(self, kernel):
         self.kernel = kernel
 
@@ -83,23 +74,6 @@ class KernelOutput(Output):
 
     def display_data(self, result):
         self.kernel.display_data_callback(result)
-
-    def svg_xml(self, data, width, height, viewbox):
-        # relies on https://github.com/jupyter/notebook/pull/1680
-        svg = self.svg.substitute(
-            data=data,
-            viewbox=' '.join(['%f' % t for t in viewbox]))
-        return '<mglyph width="%dpx" height="%dpx" src="data:image/svg+xml;base64,%s"/>' % (
-            int(width),
-            int(height),
-            base64.b64encode(svg.encode('utf8')).decode('utf8'))
-
-    def img_xml(self, data, width, height):
-        # relies on https://github.com/jupyter/notebook/pull/1680
-        return '<mglyph width="%dpx" height="%dpx" src="%s"/>' % (
-            int(width),
-            int(height),
-            data)
 
 
 class MathicsKernel(Kernel):
