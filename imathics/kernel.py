@@ -3,6 +3,8 @@ import traceback
 
 from ipykernel.kernelbase import Kernel
 from ipykernel.comm import CommManager
+from traitlets import Instance, Type, Any
+from ipykernel.zmqshell import ZMQInteractiveShell
 
 from mathics.core.definitions import Definitions
 from mathics.core.evaluation import Evaluation, Message, Result, Output
@@ -16,7 +18,6 @@ from mathics import settings
 from mathics.version import __version__
 from mathics.doc.doc import Doc
 
-from string import Template
 import os
 import base64
 
@@ -69,11 +70,11 @@ class KernelOutput(Output):
     def out(self, out):
         self.kernel.out_callback(out)
 
-    def clear_output(self, wait=False):
+    def clear(self, wait=False):
         self.kernel.clear_output_callback(wait=wait)
 
-    def display_data(self, result):
-        self.kernel.display_data_callback(result)
+    def display(self, data, metadata):
+        self.kernel.display_data_callback(data, metadata)
 
 
 class MathicsKernel(Kernel):
@@ -86,6 +87,12 @@ class MathicsKernel(Kernel):
     }
     banner = "Mathics kernel"   # TODO
 
+    shell = Instance('IPython.core.interactiveshell.InteractiveShellABC', allow_none=True)
+    shell_class = Type(ZMQInteractiveShell)
+
+    user_module = Any()
+    user_ns = Instance(dict, args=None, allow_none=True)
+
     def __init__(self, **kwargs):
         Kernel.__init__(self, **kwargs)
         self.definitions = Definitions(add_builtin=True)        # TODO Cache
@@ -93,6 +100,20 @@ class MathicsKernel(Kernel):
         self.establish_comm_manager()  # needed for ipywidgets and Manipulate[]
 
     def establish_comm_manager(self):
+        # see ipykernel/ipkernel.py
+
+        self.shell = self.shell_class.instance(
+            parent=self,
+            profile_dir=self.profile_dir,
+            user_module=self.user_module,
+            user_ns=self.user_ns,
+            kernel=self)
+        self.shell.displayhook.session = self.session
+        self.shell.displayhook.pub_socket = self.iopub_socket
+        self.shell.displayhook.topic = self._topic('execute_result')
+        self.shell.display_pub.session = self.session
+        self.shell.display_pub.pub_socket = self.iopub_socket
+
         self.comm_manager = CommManager(parent=self, kernel=self)
         comm_msg_types = ['comm_open', 'comm_msg', 'comm_close']
         for msg_type in comm_msg_types:
@@ -219,13 +240,13 @@ class MathicsKernel(Kernel):
         content = dict(wait=wait)
         self.send_response(self.iopub_socket, 'clear_output', content)
 
-    def display_data_callback(self, result):
+    def display_data_callback(self, data, metadata):
         self.reconfigure_mathjax()
 
         # see http://jupyter-client.readthedocs.org/en/latest/messaging.html
         content = {
-            'data': result.data,
-            'metadata': result.metadata,
+            'data': data,
+            'metadata': metadata,
         }
         self.send_response(self.iopub_socket, 'display_data', content)
 
