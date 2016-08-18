@@ -205,6 +205,10 @@ class MathicsKernel(Kernel):
         # of data uris which we use in mglyphs for displaying svgs and imgs.
         # enable the "data" protocol here. also remove font size restrictions.
 
+        # we set processSectionDelay to 0 since that drastically improves the
+        # visual experience of Manipulate as there's a lot less jitter, also see
+        # http://docs.mathjax.org/en/latest/api/hub.html
+
         safeModeJS = """
             MathJax.Hub.Config({
               Safe: {
@@ -216,6 +220,8 @@ class MathicsKernel(Kernel):
                   }
                 }
           });
+
+          MathJax.Hub.processSectionDelay = 0;
         """
 
         # see http://jupyter-client.readthedocs.org/en/latest/messaging.html
