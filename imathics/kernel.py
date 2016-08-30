@@ -69,8 +69,8 @@ class KernelOutput(Output):
         super(KernelOutput, self).__init__(kernel.layout_engine)
         self.kernel = kernel
 
-    def layout(self):
-        return 'svg'
+    def svgify(self):
+        return True
 
     def out(self, out):
         self.kernel.out_callback(out)
