@@ -7,7 +7,7 @@ from traitlets import Instance, Type, Any
 from ipykernel.zmqshell import ZMQInteractiveShell
 
 from mathics.core.definitions import Definitions
-from mathics.core.evaluation import Evaluation, Message, Result, Output
+from mathics.core.evaluation import Evaluation, Message, Result, Output, Print
 from mathics.core.expression import Integer
 from mathics.core.parser import IncompleteSyntaxError, TranslateError, ScanError
 from mathics.core.parser.util import parse
@@ -103,7 +103,7 @@ class MathicsKernel(Kernel):
         self.definitions = Definitions(add_builtin=True)        # TODO Cache
         self.definitions.set_ownvalue('$Line', Integer(0))  # Reset the line number
         self.establish_comm_manager()  # needed for ipywidgets and Manipulate[]
-        self.layout_engine = LayoutEngine()
+        self.layout_engine = None
 
     def establish_comm_manager(self):
         # see ipykernel/ipkernel.py
@@ -140,19 +140,26 @@ class MathicsKernel(Kernel):
             'text/latex': 'tex',
         }
 
-        evaluation = Evaluation(self.definitions, output=KernelOutput(self), format=formats)
         try:
+            if self.layout_engine is None:
+                self.layout_engine = LayoutEngine()
+
+            evaluation = Evaluation(self.definitions, output=KernelOutput(self), format=formats)
+
             result = evaluation.parse_evaluate(code, timeout=settings.TIMEOUT)
+
             if result:
                 self.result_callback(result)
         except Exception as exc:
+            self.out_callback(Print('An error occured: ') + str(exc))
+
             # internal error
             response['status'] = 'error'
             response['ename'] = 'System:exception'
             response['traceback'] = traceback.format_exception(*sys.exc_info())
-            result = []
         else:
             response['status'] = 'ok'
+
         response['execution_count'] = self.definitions.get_line_no()
 
         return response
