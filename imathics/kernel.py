@@ -151,7 +151,7 @@ class MathicsKernel(Kernel):
             if result:
                 self.result_callback(result)
         except Exception as exc:
-            self.out_callback(Print('An error occured: ') + str(exc))
+            self.out_callback(Print('An error occured: ' + str(exc)))
 
             # internal error
             response['status'] = 'error'
