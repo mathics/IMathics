@@ -125,6 +125,10 @@ class MathicsKernel(Kernel):
         for msg_type in comm_msg_types:
             self.shell_handlers[msg_type] = getattr(self.comm_manager, msg_type)
 
+    def init_layout_engine(self):
+        if self.layout_engine is None:
+            self.layout_engine = LayoutEngine()
+
     def do_execute(self, code, silent, store_history=True, user_expressions=None,
                    allow_stdin=False):
         # TODO update user definitions
@@ -141,8 +145,7 @@ class MathicsKernel(Kernel):
         }
 
         try:
-            if self.layout_engine is None:
-                self.layout_engine = LayoutEngine()
+            self.init_layout_engine()
 
             evaluation = Evaluation(self.definitions, output=KernelOutput(self), format=formats)
 
