@@ -182,74 +182,7 @@ class MathicsKernel(Kernel):
             raise ValueError('Unknown out')
         self.send_response(self.iopub_socket, 'stream', content)
 
-    def legacy_result_callback(self, result):
-        # this is code that tries to replicate the classic Mathics server JavaScript logic. hopefully we
-        # can find a better way.
-
-        mathics_js = ""
-
-        with open(os.path.dirname(os.path.abspath(__file__)) + '/mathics.js', 'r') as f:
-            mathics_js += f.read()
-
-        html = result.result['text/html']
-
-        js = "<span id='myAnchor'></span><script>" + mathics_js + """var f = function() {
-
-        var myAnchor = document.getElementById("myAnchor");
-        var el = document.createElement('span');
-
-        var node = createLine(window.atob('""" + base64.b64encode(html.encode('utf8')).decode('ascii') + """'));
-
-        myAnchor.parentNode.replaceChild(node, myAnchor);
-
-        }; f();
-
-        </script>
-        """
-
-        data = {'text/html': js}
-
-        content = {
-            'execution_count': result.line_no,
-            'data': data,  # result.data,
-            'metadata': {},
-        }
-        self.send_response(self.iopub_socket, 'execute_result', content)
-
-    def reconfigure_mathjax(self):
-        # Jupyter's default MathJax configuration ("safe" mode) blocks the use
-        # of data uris which we use in mglyphs for displaying svgs and imgs.
-        # enable the "data" protocol here. also remove font size restrictions.
-
-        # we set processSectionDelay to 0 since that drastically improves the
-        # visual experience of Manipulate as there's a lot less jitter, also see
-        # http://docs.mathjax.org/en/latest/api/hub.html
-
-        safeModeJS = """
-            MathJax.Hub.Config({
-              Safe: {
-                  safeProtocols: {
-                    data: true
-                  },
-                  allow: {
-                    fontsize: "all"
-                  }
-                }
-          });
-
-          MathJax.Hub.processSectionDelay = 0;
-        """
-
-        # see http://jupyter-client.readthedocs.org/en/latest/messaging.html
-        content = {
-            'data': {'application/javascript': safeModeJS},
-            'metadata': {},
-        }
-        self.send_response(self.iopub_socket, 'display_data', content)
-
     def result_callback(self, result):
-        self.reconfigure_mathjax()
-
         content = {
             'execution_count': result.line_no,
             'data': result.result,
@@ -263,8 +196,6 @@ class MathicsKernel(Kernel):
         self.send_response(self.iopub_socket, 'clear_output', content)
 
     def display_data_callback(self, data, metadata):
-        self.reconfigure_mathjax()
-
         # see http://jupyter-client.readthedocs.org/en/latest/messaging.html
         content = {
             'data': data,
