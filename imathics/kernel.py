@@ -17,7 +17,7 @@ from mathics.builtin import builtins
 from mathics import settings
 from mathics.version import __version__
 from mathics.doc.doc import Doc
-from mathics.layout.client import LayoutEngine
+from mathics.layout.client import WebEngine
 
 import os
 import base64
@@ -66,7 +66,7 @@ def parse_lines(lines, definitions):
 
 class KernelOutput(Output):
     def __init__(self, kernel):
-        super(KernelOutput, self).__init__(kernel.layout_engine)
+        super(KernelOutput, self).__init__(kernel.web_engine)
         self.kernel = kernel
 
     def svgify(self):
@@ -103,7 +103,7 @@ class MathicsKernel(Kernel):
         self.definitions = Definitions(add_builtin=True)        # TODO Cache
         self.definitions.set_ownvalue('$Line', Integer(0))  # Reset the line number
         self.establish_comm_manager()  # needed for ipywidgets and Manipulate[]
-        self.layout_engine = None
+        self.web_engine = None
 
     def establish_comm_manager(self):
         # see ipykernel/ipkernel.py
@@ -125,9 +125,9 @@ class MathicsKernel(Kernel):
         for msg_type in comm_msg_types:
             self.shell_handlers[msg_type] = getattr(self.comm_manager, msg_type)
 
-    def init_layout_engine(self):
-        if self.layout_engine is None:
-            self.layout_engine = LayoutEngine()
+    def init_web_engine(self):
+        if self.web_engine is None:
+            self.web_engine = WebEngine()
 
     def do_execute(self, code, silent, store_history=True, user_expressions=None,
                    allow_stdin=False):
@@ -145,7 +145,7 @@ class MathicsKernel(Kernel):
         }
 
         try:
-            self.init_layout_engine()
+            self.init_web_engine()
 
             evaluation = Evaluation(self.definitions, output=KernelOutput(self), format=formats)
 
