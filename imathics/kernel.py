@@ -17,10 +17,12 @@ from mathics.builtin import builtins
 from mathics import settings
 from mathics.version import __version__
 from mathics.doc.doc import Doc
-from mathics.layout.client import WebEngine
 
-import os
-import base64
+try:
+    from mathics.layout.client import WebEngine
+    web_engine_available = True
+except ImportError:
+    web_engine_available = False
 
 
 def parse_lines(lines, definitions):
@@ -126,7 +128,7 @@ class MathicsKernel(Kernel):
             self.shell_handlers[msg_type] = getattr(self.comm_manager, msg_type)
 
     def init_web_engine(self):
-        if self.web_engine is None:
+        if self.web_engine is None and web_engine_available:
             self.web_engine = WebEngine()
 
     def do_execute(self, code, silent, store_history=True, user_expressions=None,
