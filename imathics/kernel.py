@@ -10,19 +10,14 @@ from mathics.core.definitions import Definitions
 from mathics.core.evaluation import Evaluation, Message, Result, Output, Print
 from mathics.core.expression import Integer
 from mathics.core.parser import IncompleteSyntaxError, TranslateError, ScanError
-from mathics.core.parser.util import parse
+from mathics.core.parser import parse, TranslateError
 from mathics.core.parser.feed import SingleLineFeeder
 from mathics.core.parser.tokeniser import Tokeniser
 from mathics.builtin import builtins
 from mathics import settings
 from mathics.version import __version__
 from mathics.doc.doc import Doc
-
-try:
-    from mathics.layout.client import WebEngine
-    web_engine_available = True
-except ImportError:
-    web_engine_available = False
+from mathics.layout.client import WebEngine
 
 
 def parse_lines(lines, definitions):
@@ -50,7 +45,7 @@ def parse_lines(lines, definitions):
             incomplete_exc = IncompleteSyntaxError(len(query)-1)
             continue
         try:
-            expression = parse(SingleLineFeeder(lines), definitions)
+            expression = parse(definitions, SingleLineFeeder(query))
         except IncompleteSyntaxError as exc:
             incomplete_exc = exc
         else:
@@ -128,7 +123,7 @@ class MathicsKernel(Kernel):
             self.shell_handlers[msg_type] = getattr(self.comm_manager, msg_type)
 
     def init_web_engine(self):
-        if self.web_engine is None and web_engine_available:
+        if self.web_engine is None:
             self.web_engine = WebEngine()
 
     def do_execute(self, code, silent, store_history=True, user_expressions=None,

@@ -11,7 +11,13 @@ from setuptools.command.install import install
 # General Requirements
 SETUP_REQUIRES = ['ipython', 'ipykernel']
 
-INSTALL_REQUIRES = ['mathics>=1.0.dev0'] + SETUP_REQUIRES
+# as long as imathics as mathics are in experimental development, it's a good idea to
+# expect the user to manually install the lastest version of mathics, instead of pulling
+# some old version here that breaks everything then.
+
+#INSTALL_REQUIRES = ['mathics>=1.0.dev0'] + SETUP_REQUIRES
+
+INSTALL_REQUIRES = SETUP_REQUIRES
 
 
 kernel_json = {
