@@ -66,6 +66,9 @@ class KernelOutput(Output):
         super(KernelOutput, self).__init__(kernel.web_engine)
         self.kernel = kernel
 
+    def max_stored_size(self, settings):
+        return None
+
     def out(self, out):
         self.kernel.out_callback(out)
 
