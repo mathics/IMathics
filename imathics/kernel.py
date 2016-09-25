@@ -193,6 +193,10 @@ class MathicsKernel(Kernel):
 
         safeModeJS = """
             MathJax.Hub.Config({
+              showMathMenu: false,
+              showProcessingMessages: false,
+              messageStyle: "normal",
+              displayAlign: "left",
               Safe: {
                   safeProtocols: {
                     data: true
@@ -202,9 +206,13 @@ class MathicsKernel(Kernel):
                   }
                 },
                 "HTML-CSS": {
-                    availableFonts: [], /* force Web fonts */
-                    preferredFont: null, /* force Web fonts */
-                    webFont: "Asana-Math"
+                    availableFonts: [], /* force Web font */
+                    preferredFont: null, /* force Web font */
+                    webFont: "Asana-Math",
+                    linebreaks: {
+                        automatic: true,
+                        width: "70%"
+                    }
                 }
           });
 
