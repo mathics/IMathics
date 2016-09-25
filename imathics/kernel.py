@@ -200,6 +200,11 @@ class MathicsKernel(Kernel):
                   allow: {
                     fontsize: "all"
                   }
+                },
+                "HTML-CSS": {
+                    availableFonts: [], /* force Web fonts */
+                    preferredFont: null, /* force Web fonts */
+                    webFont: "Asana-Math"
                 }
           });
 
