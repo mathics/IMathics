@@ -63,7 +63,10 @@ def parse_lines(lines, definitions):
 
 class KernelOutput(Output):
     def __init__(self, kernel):
-        super(KernelOutput, self).__init__(kernel.web_engine)
+        if getattr(Output, 'version', None) is None:
+            super(KernelOutput, self).__init__()
+        else:
+            super(KernelOutput, self).__init__(kernel.web_engine)
         self.kernel = kernel
 
     def max_stored_size(self, settings):
@@ -154,12 +157,14 @@ class MathicsKernel(Kernel):
             if result:
                 self.result_callback(result)
         except Exception as exc:
-            self.out_callback(Print('An error occured: ' + str(exc)))
+            stack = traceback.format_exception(*sys.exc_info())
+
+            self.out_callback(Print('An error occured: ' + str(exc) + '\n\n' + '\n'.join(stack)))
 
             # internal error
             response['status'] = 'error'
             response['ename'] = 'System:exception'
-            response['traceback'] = traceback.format_exception(*sys.exc_info())
+            response['traceback'] = stack
         else:
             response['status'] = 'ok'
 
